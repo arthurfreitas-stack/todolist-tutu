@@ -25,8 +25,17 @@ function groupByDay(entries: UnifiedEntry[]) {
 }
 
 export default function LogTimeline({ log, achievements, onAchievementDeleted, onNewAchievement }: Props) {
+  // Keep only the latest log entry per taskId
+  const deduplicatedLog = log.reduce((acc, entry) => {
+    const existing = acc.find(e => e.taskId === entry.taskId)
+    if (!existing || entry.timestamp > existing.timestamp) {
+      return [...acc.filter(e => e.taskId !== entry.taskId), entry]
+    }
+    return acc
+  }, [] as LogEntry[])
+
   const unified: UnifiedEntry[] = [
-    ...log.map(e => ({ kind: 'task' as const, timestamp: e.timestamp, data: e })),
+    ...deduplicatedLog.map(e => ({ kind: 'task' as const, timestamp: e.timestamp, data: e })),
     ...achievements.map(a => ({ kind: 'achievement' as const, timestamp: a.doneAt, data: a })),
   ].sort((a, b) => b.timestamp.localeCompare(a.timestamp))
 
