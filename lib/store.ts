@@ -1,8 +1,10 @@
 'use client'
-import { Task, LogEntry, Priority } from './types'
+import { Task, LogEntry, Priority, Achievement, MetricEntry } from './types'
 
 const TASKS_KEY = 'allu_tasks'
 const LOG_KEY = 'allu_log'
+const ACHIEVEMENTS_KEY = 'allu_achievements'
+const METRICS_KEY = 'allu_metrics'
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 11) + Date.now().toString(36)
@@ -90,6 +92,46 @@ export function exportLogCSV(): void {
   a.download = `allu-tasks-log-${new Date().toISOString().slice(0, 10)}.csv`
   a.click()
   URL.revokeObjectURL(url)
+}
+
+// Achievements
+export function getAchievements(): Achievement[] {
+  if (typeof window === 'undefined') return []
+  try { return JSON.parse(localStorage.getItem(ACHIEVEMENTS_KEY) || '[]') } catch { return [] }
+}
+
+export function addAchievement(description: string, doneAt: string): Achievement {
+  const entry: Achievement = { id: generateId(), description, doneAt, createdAt: new Date().toISOString() }
+  const list = getAchievements()
+  localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify([entry, ...list]))
+  return entry
+}
+
+export function deleteAchievement(id: string): void {
+  localStorage.setItem(ACHIEVEMENTS_KEY, JSON.stringify(getAchievements().filter(a => a.id !== id)))
+}
+
+// Metrics
+export function getMetrics(): MetricEntry[] {
+  if (typeof window === 'undefined') return []
+  try { return JSON.parse(localStorage.getItem(METRICS_KEY) || '[]') } catch { return [] }
+}
+
+export function saveMetricEntry(date: string, content: string): MetricEntry {
+  const metrics = getMetrics()
+  const existing = metrics.find(m => m.date === date)
+  if (existing) {
+    const updated = metrics.map(m => m.date === date ? { ...m, content, updatedAt: new Date().toISOString() } : m)
+    localStorage.setItem(METRICS_KEY, JSON.stringify(updated))
+    return { ...existing, content, updatedAt: new Date().toISOString() }
+  }
+  const entry: MetricEntry = { id: generateId(), date, content, updatedAt: new Date().toISOString() }
+  localStorage.setItem(METRICS_KEY, JSON.stringify([entry, ...metrics]))
+  return entry
+}
+
+export function deleteMetricEntry(id: string): void {
+  localStorage.setItem(METRICS_KEY, JSON.stringify(getMetrics().filter(m => m.id !== id)))
 }
 
 export function getStats() {

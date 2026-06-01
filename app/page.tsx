@@ -1,14 +1,16 @@
 'use client'
 import { useState, useEffect, useCallback } from 'react'
-import { Task } from '@/lib/types'
-import { getTasks, createTask, updateTask, completeTask, deleteTask, checkOverdueTasks, getLog } from '@/lib/store'
+import { Task, Achievement, Status } from '@/lib/types'
+import { getTasks, createTask, updateTask, completeTask, deleteTask, checkOverdueTasks, getLog, getAchievements, addAchievement } from '@/lib/store'
 import TaskCard from '@/components/TaskCard'
 import TaskModal from '@/components/TaskModal'
 import LogTimeline from '@/components/LogTimeline'
 import StatsPanel from '@/components/StatsPanel'
+import MetricsPanel from '@/components/MetricsPanel'
+import AchievementModal from '@/components/AchievementModal'
 import { LogEntry } from '@/lib/types'
 
-type Tab = 'board' | 'log' | 'stats'
+type Tab = 'board' | 'log' | 'metrics' | 'stats'
 type Filter = { search: string; priority: string; assignee: string }
 
 const AlluLogo = () => (
@@ -21,8 +23,10 @@ const AlluLogo = () => (
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [log, setLog] = useState<LogEntry[]>([])
+  const [achievements, setAchievements] = useState<Achievement[]>([])
   const [tab, setTab] = useState<Tab>('board')
-  const [modalOpen, setModalOpen] = useState(false)
+  const [taskModalOpen, setTaskModalOpen] = useState(false)
+  const [achievementModalOpen, setAchievementModalOpen] = useState(false)
   const [editTask, setEditTask] = useState<Task | null>(null)
   const [filter, setFilter] = useState<Filter>({ search: '', priority: '', assignee: '' })
   const [statsKey, setStatsKey] = useState(0)
@@ -31,25 +35,39 @@ export default function Home() {
     checkOverdueTasks()
     setTasks(getTasks())
     setLog(getLog())
+    setAchievements(getAchievements())
     setStatsKey(k => k + 1)
   }, [])
 
   useEffect(() => {
     reload()
     const interval = setInterval(reload, 60000)
-    const onKey = (e: KeyboardEvent) => { if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setEditTask(null); setModalOpen(true) } }
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') { e.preventDefault(); setEditTask(null); setTaskModalOpen(true) }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'j') { e.preventDefault(); setAchievementModalOpen(true) }
+    }
     window.addEventListener('keydown', onKey)
     return () => { clearInterval(interval); window.removeEventListener('keydown', onKey) }
   }, [reload])
 
-  function handleSave(data: Omit<Task, 'id' | 'createdAt' | 'status'>) {
+  function handleSaveTask(data: Omit<Task, 'id' | 'createdAt' | 'status'>) {
     if (editTask) { updateTask(editTask.id, data) } else { createTask(data) }
+    reload()
+  }
+
+  function handleSaveAchievement(description: string, doneAt: string) {
+    addAchievement(description, doneAt)
+    reload()
+  }
+
+  function handleChangeStatus(id: string, status: Status) {
+    if (status === 'done') { completeTask(id) } else { updateTask(id, { status, completedAt: undefined }) }
     reload()
   }
 
   function handleComplete(id: string) { completeTask(id); reload() }
   function handleDelete(id: string) { if (confirm('Excluir tarefa?')) { deleteTask(id); reload() } }
-  function handleEdit(task: Task) { setEditTask(task); setModalOpen(true) }
+  function handleEdit(task: Task) { setEditTask(task); setTaskModalOpen(true) }
 
   const filtered = tasks.filter(t => {
     if (filter.search && !t.title.toLowerCase().includes(filter.search.toLowerCase())) return false
@@ -60,8 +78,16 @@ export default function Home() {
 
   const urgent = filtered.filter(t => t.status === 'pending' && t.priority === 'urgent')
   const overdue = filtered.filter(t => t.status === 'overdue')
+  const inProgress = filtered.filter(t => t.status === 'in_progress')
   const pending = filtered.filter(t => t.status === 'pending' && t.priority !== 'urgent')
   const done = filtered.filter(t => t.status === 'done')
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'board', label: 'Tarefas' },
+    { key: 'log', label: 'Log' },
+    { key: 'metrics', label: 'Métricas' },
+    { key: 'stats', label: 'Dashboard' },
+  ]
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -71,18 +97,30 @@ export default function Home() {
             <AlluLogo />
             <div>
               <h1 className="text-base font-bold text-gray-900 leading-none">Allu Tasks</h1>
-              <p className="text-xs text-gray-400">{tasks.filter(t => t.status === 'pending').length} pendentes · {tasks.filter(t => t.status === 'overdue').length} atrasadas</p>
+              <p className="text-xs text-gray-400">{tasks.filter(t => t.status === 'pending' || t.status === 'in_progress').length} pendentes · {tasks.filter(t => t.status === 'overdue').length} atrasadas</p>
             </div>
           </div>
-          <button onClick={() => { setEditTask(null); setModalOpen(true) }} className="bg-[#52D680] text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-[#3ec46d] transition flex items-center gap-1">
-            <span className="text-lg leading-none">+</span> Nova tarefa
-            <span className="hidden md:inline text-xs opacity-70 ml-1">⌘K</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAchievementModalOpen(true)}
+              className="border border-[#52D680] text-[#52D680] rounded-xl px-3 py-2 text-sm font-semibold hover:bg-green-50 transition hidden md:flex items-center gap-1"
+              title="⌘J"
+            >
+              ⭐ Realização
+            </button>
+            <button
+              onClick={() => { setEditTask(null); setTaskModalOpen(true) }}
+              className="bg-[#52D680] text-white rounded-xl px-4 py-2 text-sm font-semibold hover:bg-[#3ec46d] transition flex items-center gap-1"
+            >
+              <span className="text-lg leading-none">+</span> Nova tarefa
+              <span className="hidden md:inline text-xs opacity-70 ml-1">⌘K</span>
+            </button>
+          </div>
         </div>
         <div className="max-w-5xl mx-auto px-4 flex gap-1 pb-0">
-          {(['board', 'log', 'stats'] as Tab[]).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`px-4 py-2 text-sm font-medium border-b-2 transition ${tab === t ? 'border-[#52D680] text-[#52D680]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
-              {t === 'board' ? 'Tarefas' : t === 'log' ? 'Log' : 'Dashboard'}
+          {tabs.map(t => (
+            <button key={t.key} onClick={() => setTab(t.key)} className={`px-4 py-2 text-sm font-medium border-b-2 transition ${tab === t.key ? 'border-[#52D680] text-[#52D680]' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {t.label}
             </button>
           ))}
         </div>
@@ -105,9 +143,9 @@ export default function Home() {
 
             {urgent.length > 0 && (
               <div className="mb-6 bg-red-50 border border-red-200 rounded-2xl p-4">
-                <p className="text-sm font-bold text-red-700 mb-3 flex items-center gap-2">🔥 Urgentes ({urgent.length})</p>
+                <p className="text-sm font-bold text-red-700 mb-3">🔥 Urgentes ({urgent.length})</p>
                 <div className="space-y-3">
-                  {urgent.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} />)}
+                  {urgent.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} onChangeStatus={handleChangeStatus} />)}
                 </div>
               </div>
             )}
@@ -116,7 +154,16 @@ export default function Home() {
               <div className="mb-6">
                 <p className="text-sm font-semibold text-red-600 mb-3">⚠ Atrasadas ({overdue.length})</p>
                 <div className="space-y-3">
-                  {overdue.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} />)}
+                  {overdue.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} onChangeStatus={handleChangeStatus} />)}
+                </div>
+              </div>
+            )}
+
+            {inProgress.length > 0 && (
+              <div className="mb-6">
+                <p className="text-sm font-semibold text-blue-600 mb-3">⚡ Em andamento ({inProgress.length})</p>
+                <div className="space-y-3">
+                  {inProgress.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} onChangeStatus={handleChangeStatus} />)}
                 </div>
               </div>
             )}
@@ -126,28 +173,44 @@ export default function Home() {
                 <p className="text-sm font-semibold text-gray-600 mb-3">Pendentes ({pending.length})</p>
                 {pending.length === 0 && urgent.length === 0 && <p className="text-center py-8 text-gray-400 text-sm bg-white rounded-2xl border border-dashed border-gray-200">Nenhuma tarefa pendente</p>}
                 <div className="space-y-3">
-                  {pending.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} />)}
+                  {pending.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} onChangeStatus={handleChangeStatus} />)}
                 </div>
               </div>
               <div>
                 <p className="text-sm font-semibold text-gray-600 mb-3">Concluídas ({done.length})</p>
                 {done.length === 0 && <p className="text-center py-8 text-gray-400 text-sm bg-white rounded-2xl border border-dashed border-gray-200">Nenhuma tarefa concluída</p>}
                 <div className="space-y-3">
-                  {done.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} />)}
+                  {done.map(t => <TaskCard key={t.id} task={t} onComplete={handleComplete} onEdit={handleEdit} onDelete={handleDelete} onChangeStatus={handleChangeStatus} />)}
                 </div>
               </div>
             </div>
           </>
         )}
-        {tab === 'log' && <LogTimeline log={log} />}
+
+        {tab === 'log' && (
+          <LogTimeline
+            log={log}
+            achievements={achievements}
+            onAchievementDeleted={reload}
+            onNewAchievement={() => setAchievementModalOpen(true)}
+          />
+        )}
+
+        {tab === 'metrics' && <MetricsPanel />}
         {tab === 'stats' && <StatsPanel key={statsKey} />}
       </main>
 
       <TaskModal
-        open={modalOpen}
+        open={taskModalOpen}
         task={editTask}
-        onClose={() => { setModalOpen(false); setEditTask(null) }}
-        onSave={handleSave}
+        onClose={() => { setTaskModalOpen(false); setEditTask(null) }}
+        onSave={handleSaveTask}
+      />
+
+      <AchievementModal
+        open={achievementModalOpen}
+        onClose={() => setAchievementModalOpen(false)}
+        onSave={handleSaveAchievement}
       />
     </div>
   )
