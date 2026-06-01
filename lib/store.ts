@@ -1,5 +1,5 @@
 'use client'
-import { Task, LogEntry, Priority, Status } from './types'
+import { Task, LogEntry, Priority } from './types'
 
 const TASKS_KEY = 'allu_tasks'
 const LOG_KEY = 'allu_log'

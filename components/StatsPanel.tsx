@@ -2,6 +2,7 @@
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { getStats } from '@/lib/store'
 import { priorityLabel } from '@/lib/utils'
+import { Priority } from '@/lib/types'
 
 const PRIORITY_COLORS: Record<string, string> = { urgent: '#ef4444', high: '#f97316', medium: '#eab308', low: '#9ca3af' }
 
@@ -67,7 +68,7 @@ export default function StatsPanel() {
         <div className="space-y-2">
           {s.byPriority.map(({ priority, count }) => (
             <div key={priority} className="flex items-center gap-3">
-              <span className="text-xs w-16 text-gray-500">{priorityLabel(priority as any)}</span>
+              <span className="text-xs w-16 text-gray-500">{priorityLabel(priority as Priority)}</span>
               <div className="flex-1 bg-gray-100 rounded-full h-2">
                 <div className="h-2 rounded-full transition-all" style={{ width: `${s.total ? (count / s.total) * 100 : 0}%`, backgroundColor: PRIORITY_COLORS[priority] }} />
               </div>
